@@ -18,11 +18,11 @@
  */
 package org.apache.brooklyn;
 
+import static org.apache.brooklyn.KarafUtils.brooklynKarafDist;
+import static org.apache.brooklyn.KarafUtils.karafStandardFeaturesRepository;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.ops4j.pax.exam.CoreOptions.junitBundles;
-import static org.ops4j.pax.exam.CoreOptions.maven;
-import static org.ops4j.pax.exam.MavenUtils.asInProject;
 import static org.ops4j.pax.exam.karaf.options.KarafDistributionOption.configureConsole;
 import static org.ops4j.pax.exam.karaf.options.KarafDistributionOption.features;
 import static org.ops4j.pax.exam.karaf.options.KarafDistributionOption.karafDistributionConfiguration;
@@ -41,8 +41,6 @@ import org.ops4j.pax.exam.Configuration;
 import org.ops4j.pax.exam.Option;
 import org.ops4j.pax.exam.junit.PaxExam;
 import org.ops4j.pax.exam.karaf.options.LogLevelOption.LogLevel;
-import org.ops4j.pax.exam.options.MavenArtifactUrlReference;
-import org.ops4j.pax.exam.options.MavenUrlReference;
 import org.ops4j.pax.exam.spi.reactors.ExamReactorStrategy;
 import org.ops4j.pax.exam.spi.reactors.PerClass;
 import org.ops4j.pax.exam.util.Filter;
@@ -50,6 +48,8 @@ import org.osgi.framework.BundleContext;
 
 /**
  * Tests the apache-brooklyn karaf runtime assembly.
+ * 
+ * Keeping it a non-integration test so we have at least a basic OSGi sanity check. (takes 14 sec)
  */
 @RunWith(PaxExam.class)
 @ExamReactorStrategy(PerClass.class)
@@ -83,24 +83,6 @@ public class AssemblyTest {
             junitBundles()
         };
     }
-
-    public static MavenArtifactUrlReference brooklynKarafDist() {
-        return maven()
-                .groupId("org.apache.brooklyn")
-                .artifactId("apache-brooklyn")
-                .type("zip")
-                .version(asInProject());
-    }
-
-    public static MavenUrlReference karafStandardFeaturesRepository() {
-        return maven()
-                .groupId("org.apache.karaf.features")
-                .artifactId("standard")
-                .type("xml")
-                .classifier("features")
-                .version(asInProject());
-    }
-
     @Test
     public void shouldHaveBundleContext() {
         assertNotNull(bc);
