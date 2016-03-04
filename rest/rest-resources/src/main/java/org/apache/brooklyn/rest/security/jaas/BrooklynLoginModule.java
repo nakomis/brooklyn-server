@@ -150,6 +150,7 @@ public class BrooklynLoginModule implements LoginModule {
     private Collection<Principal> principals;
 
     public BrooklynLoginModule() {
+        Object foo = new Object();
     }
 
     private SecurityProvider getDefaultProvider() {

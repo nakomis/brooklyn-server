@@ -79,7 +79,8 @@ import javax.ws.rs.core.UriInfo;
 import org.apache.brooklyn.util.guava.Maybe;
 
 @HaHotStateRequired
-public class CatalogResource extends AbstractBrooklynRestResource implements CatalogApi {
+public class
+CatalogResource extends AbstractBrooklynRestResource implements CatalogApi {
 
     private static final Logger log = LoggerFactory.getLogger(CatalogResource.class);
     

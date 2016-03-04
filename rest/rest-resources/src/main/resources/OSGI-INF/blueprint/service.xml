@@ -39,7 +39,7 @@ limitations under the License.
                interface="org.apache.brooklyn.api.mgmt.ManagementContext" />
 
     <jaas:config name="webconsole">
-        <jaas:module className="org.apache.brooklyn.rest.security.jaas.BrooklynLoginModule"
+        <jaas:module className="org.apache.brooklyn.rest.security.oauth.OauthLoginModule"
                      flags="required" />
     </jaas:config>
 
