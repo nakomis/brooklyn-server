@@ -22,6 +22,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
+import javax.annotation.Nullable;
+
 import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.location.Location;
 import org.apache.brooklyn.api.location.LocationDefinition;
@@ -48,6 +50,7 @@ import org.apache.brooklyn.core.location.dynamic.LocationOwner;
 import org.apache.brooklyn.core.sensor.Sensors;
 import org.apache.brooklyn.entity.group.AbstractMembershipTrackingPolicy;
 import org.apache.brooklyn.entity.group.DynamicClusterImpl;
+import org.apache.brooklyn.entity.group.RemovalStrategy;
 import org.apache.brooklyn.util.collections.MutableMap;
 import org.apache.brooklyn.util.core.task.DynamicTasks;
 import org.apache.brooklyn.util.guava.Maybe;
@@ -330,11 +333,11 @@ public class ServerPoolImpl extends DynamicClusterImpl implements ServerPool {
     }
 
     @Override
-    public Function<Collection<Entity>, Entity> getRemovalStrategy() {
+    protected Function<Collection<Entity>, Entity> getRemovalStrategy() {
         return UNCLAIMED_REMOVAL_STRATEGY;
     }
 
-    private final Function<Collection<Entity>, Entity> UNCLAIMED_REMOVAL_STRATEGY = new Function<Collection<Entity>, Entity>() {
+    private final RemovalStrategy UNCLAIMED_REMOVAL_STRATEGY = new RemovalStrategy() {
         // Semantics of superclass mean that mutex should already be held when apply is called
         @Override
         public Entity apply(Collection<Entity> members) {
