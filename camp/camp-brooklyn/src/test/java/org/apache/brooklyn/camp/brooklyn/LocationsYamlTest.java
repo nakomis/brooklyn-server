@@ -28,6 +28,7 @@ import java.util.List;
 import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.location.Location;
 import org.apache.brooklyn.api.location.MachineLocation;
+import org.apache.brooklyn.core.config.ConfigKeys;
 import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.location.byon.FixedListMachineProvisioningLocation;
 import org.apache.brooklyn.location.localhost.LocalhostMachineProvisioningLocation;
@@ -270,6 +271,22 @@ public class LocationsYamlTest extends AbstractYamlTest {
         assertUserAddress((SshMachineLocation)loc.obtain(), "root", "127.0.127.1");
         assertUserAddress((SshMachineLocation)loc.obtain(), "root", "127.0.127.2");
         assertUserAddress((SshMachineLocation)loc.obtain(), "brooklyn", "127.0.0.127");
+    }
+
+    @Test
+    public void testExternalSupplierInheritanceIsUnresolved() throws Exception {
+        String yaml =
+                "location: \n" +
+                "  localhost:\n"+
+                "    brooklyn.external.test: org.apache.brooklyn.core.config.external.InPlaceExternalConfigSupplier\n"+
+                "    brooklyn.external.test.foo: fooValue\n"+
+                "    userMetadataString: $brooklyn:external(\"test\", \"foo\")\n"+
+                "services:\n"+
+                "- type: org.apache.brooklyn.core.test.entity.TestEntity\n";
+        Entity app = createStartWaitAndLogApplication(new StringReader(yaml));
+        Entity child = Iterables.getOnlyElement(app.getChildren());
+        LocalhostMachineProvisioningLocation loc = (LocalhostMachineProvisioningLocation) Iterables.getOnlyElement(Entities.getAllInheritedLocations(child));
+        loc.config();
     }
 
     public static void assertUserAddress(MachineLocation l, String user, String address) {

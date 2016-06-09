@@ -19,6 +19,7 @@
 package org.apache.brooklyn.camp.brooklyn;
 
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
 import java.io.StringReader;
@@ -28,24 +29,39 @@ import org.apache.brooklyn.api.catalog.CatalogItem;
 import org.apache.brooklyn.api.catalog.CatalogItem.CatalogBundle;
 import org.apache.brooklyn.api.catalog.CatalogItem.CatalogItemType;
 import org.apache.brooklyn.api.entity.Entity;
+import org.apache.brooklyn.api.location.LocationSpec;
+import org.apache.brooklyn.api.location.MachineLocation;
+import org.apache.brooklyn.api.location.NoMachinesAvailableException;
 import org.apache.brooklyn.api.mgmt.ExecutionContext;
 import org.apache.brooklyn.api.mgmt.ManagementContext;
+import org.apache.brooklyn.api.objs.Configurable;
+import org.apache.brooklyn.camp.brooklyn.spi.dsl.BrooklynDslDeferredSupplier;
+import org.apache.brooklyn.camp.brooklyn.spi.dsl.methods.BrooklynDslCommon;
 import org.apache.brooklyn.config.ConfigKey;
 import org.apache.brooklyn.core.config.ConfigKeys;
 import org.apache.brooklyn.core.config.external.AbstractExternalConfigSupplier;
 import org.apache.brooklyn.core.config.external.ExternalConfigSupplier;
+import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.core.internal.BrooklynProperties;
+import org.apache.brooklyn.core.location.AbstractLocation;
 import org.apache.brooklyn.core.location.cloud.CloudLocationConfig;
+import org.apache.brooklyn.core.location.geo.HostGeoInfo;
 import org.apache.brooklyn.core.mgmt.internal.CampYamlParser;
 import org.apache.brooklyn.core.mgmt.internal.LocalManagementContext;
+import org.apache.brooklyn.core.objs.BrooklynObjectInternal;
 import org.apache.brooklyn.core.test.entity.LocalManagementContextForTests;
 import org.apache.brooklyn.core.test.entity.TestApplication;
 import org.apache.brooklyn.entity.software.base.EmptySoftwareProcess;
+import org.apache.brooklyn.location.jclouds.JcloudsLocation;
+import org.apache.brooklyn.location.jclouds.JcloudsLocationTest;
+import org.apache.brooklyn.util.core.config.ConfigBag;
 import org.apache.brooklyn.util.core.task.DeferredSupplier;
 import org.apache.brooklyn.util.core.task.Tasks;
 import org.apache.brooklyn.util.exceptions.Exceptions;
+import org.apache.brooklyn.util.guava.Maybe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import com.google.common.base.Joiner;
@@ -125,6 +141,73 @@ public class ExternalConfigYamlTest extends AbstractYamlTest {
         TestApplication app = (TestApplication) createAndStartApplication(new StringReader(yaml));
         waitForApplicationTasks(app);
         assertEquals(Iterables.getOnlyElement( app.getLocations() ).config().get(MY_CONFIG_KEY), "myval");
+        Maybe rawConfig = ((BrooklynObjectInternal.ConfigurationSupportInternal)Iterables.getOnlyElement(app.getLocations()).config()).getRaw(MY_CONFIG_KEY);
+        assertTrue(rawConfig.isPresentAndNonNull());
+        assertTrue(rawConfig.get() instanceof BrooklynDslDeferredSupplier);
+        assertEquals("myval", Entities.submit(app, ((BrooklynDslDeferredSupplier)rawConfig.get()).newTask()).get());
+    }
+
+    @Test
+    public void testExternalisedLocationConfigReferencedFromYaml2() throws Exception {
+        ConfigKey<String> MY_CONFIG_KEY = ConfigKeys.newStringConfigKey("my.config.key");
+
+        String yaml = Joiner.on("\n").join(
+                "services:",
+                "- type: org.apache.brooklyn.core.test.entity.TestApplication",
+                "  brooklyn.children:",
+                "  - type: org.apache.brooklyn.entity.software.base.EmptySoftwareProcess",
+                "location:",
+                "  aws-ec2:eu-west-1:",
+                "    identity: ",  REMOVED IDENTITY
+                "    credential: ",  REMOVED CREDENTIAL
+                "    my.config.key: $brooklyn:external(\"myprovider\", \"mykey\")");
+
+        TestApplication app = (TestApplication) createAndStartApplication(new StringReader(yaml));
+        waitForApplicationTasks(app);
+        assertEquals(Iterables.getOnlyElement( app.getLocations() ).config().get(MY_CONFIG_KEY), "myval");
+        Maybe rawConfig = ((BrooklynObjectInternal.ConfigurationSupportInternal)Iterables.getOnlyElement(app.getLocations()).config()).getRaw(MY_CONFIG_KEY);
+        assertTrue(rawConfig.isPresentAndNonNull());
+        assertTrue(rawConfig.get() instanceof BrooklynDslDeferredSupplier);
+        assertEquals("myval", Entities.submit(app, ((BrooklynDslDeferredSupplier)rawConfig.get()).newTask()).get());
+
+        Maybe rawChildConfig = ((BrooklynObjectInternal.ConfigurationSupportInternal)Iterables.getOnlyElement(Iterables.getOnlyElement(app.getChildren()).getLocations()).config()).getRaw(MY_CONFIG_KEY);
+        assertTrue(rawChildConfig.isPresentAndNonNull());
+        assertTrue(rawChildConfig.get() instanceof BrooklynDslDeferredSupplier);
+        assertEquals("myval", Entities.submit(app, ((BrooklynDslDeferredSupplier)rawChildConfig.get()).newTask()).get());
+    }
+
+    @Test
+    public void testExternalSupplierInheritanceIsUnresolved() throws NoMachinesAvailableException {
+        ((LocalManagementContext)mgmt()).getExternalConfigProviderRegistry().addProvider("test", new ExternalConfigSupplier() {
+            @Override
+            public String getName() {
+                return "foo";
+            }
+
+            @Override
+            public String get(String key) {
+                return null;
+            }
+        });
+        ((LocalManagementContext)mgmt()).getBrooklynProperties().put("brooklyn.external.test", "org.apache.brooklyn.core.config.external.InPlaceExternalConfigSupplier");
+        ((LocalManagementContext)mgmt()).getBrooklynProperties().put("brooklyn.external.test.foo", "fooValue");
+        ConfigBag allConfig = ConfigBag.newInstance()
+//        org.apache.brooklyn.core.config.external.InPlaceExternalConfigSupplier
+                .configure(JcloudsLocation.CLOUD_PROVIDER, "aws-ec2")
+                .configure(JcloudsLocation.ACCESS_IDENTITY, "bogus")
+                .configure(JcloudsLocation.ACCESS_CREDENTIAL, "bogus");
+//                .configure(ConfigKeys.newStringConfigKey("brooklyn.external.test"), )
+//                .configure(ConfigKeys.newStringConfigKey("brooklyn.external.test"), "org.apache.brooklyn.location.jclouds.JcloudsLocationTest.TestExternalConfigSupplier")
+//                .configure(ConfigKeys.newStringConfigKey("brooklyn.external.test.foo"), "somevalue")
+        JcloudsLocationTest.FakeLocalhostWithParentJcloudsLocation ll = ((LocalManagementContext)mgmt()).getLocationManager().createLocation(LocationSpec.create(JcloudsLocationTest.FakeLocalhostWithParentJcloudsLocation.class).configure(allConfig.getAllConfig()));
+
+        (ll.config()).set(JcloudsLocation.USER_METADATA_STRING, ((BrooklynDslDeferredSupplier)(BrooklynDslCommon.external("test", "foo"))).newTask());
+        MachineLocation l = ll.obtain();
+        log.info("loc:" +l);
+        HostGeoInfo geo = HostGeoInfo.fromLocation(l);
+        log.info("geo: "+geo);
+        Assert.assertEquals(geo.latitude, 42d, 0.00001);
+        Assert.assertEquals(geo.longitude, -20d, 0.00001);
     }
 
     // Will download the given catalog library jar

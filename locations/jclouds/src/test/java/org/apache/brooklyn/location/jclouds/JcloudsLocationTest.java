@@ -32,13 +32,17 @@ import org.apache.brooklyn.api.location.LocationSpec;
 import org.apache.brooklyn.api.location.MachineLocation;
 import org.apache.brooklyn.api.location.MachineLocationCustomizer;
 import org.apache.brooklyn.api.location.NoMachinesAvailableException;
+import org.apache.brooklyn.api.mgmt.ManagementContext;
 import org.apache.brooklyn.config.ConfigKey;
 import org.apache.brooklyn.core.config.ConfigKeys;
+import org.apache.brooklyn.core.config.external.AbstractExternalConfigSupplier;
+import org.apache.brooklyn.core.config.external.ExternalConfigSupplier;
 import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.core.internal.BrooklynProperties;
 import org.apache.brooklyn.core.location.LocationConfigKeys;
 import org.apache.brooklyn.core.location.cloud.names.CustomMachineNamer;
 import org.apache.brooklyn.core.location.geo.HostGeoInfo;
+import org.apache.brooklyn.core.mgmt.internal.AbstractManagementContext;
 import org.apache.brooklyn.core.mgmt.internal.LocalManagementContext;
 import org.apache.brooklyn.core.test.entity.LocalManagementContextForTests;
 import org.apache.brooklyn.location.jclouds.JcloudsLocation.UserCreation;
@@ -628,4 +632,48 @@ public class JcloudsLocationTest implements JcloudsLocationConfig {
         Mockito.when(mock.getLoginPort()).thenReturn(666);
         Assert.assertEquals(JcloudsLocation.getLoginPortOrDefault(mock,22), 666);
     }
+
+    public void testExternalSupplierInheritanceIsUnresolved() throws NoMachinesAvailableException {
+        managementContext.getExternalConfigProviderRegistry().addProvider("test", new ExternalConfigSupplier() {
+            @Override
+            public String getName() {
+                return "foo";
+            }
+
+            @Override
+            public String get(String key) {
+                return null;
+            }
+        });
+        managementContext.getBrooklynProperties().put("brooklyn.external.test", "org.apache.brooklyn.core.config.external.InPlaceExternalConfigSupplier");
+        managementContext.getBrooklynProperties().put("brooklyn.external.test.foo", "fooValue");
+        ConfigBag allConfig = ConfigBag.newInstance()
+//        org.apache.brooklyn.core.config.external.InPlaceExternalConfigSupplier
+                .configure(CLOUD_PROVIDER, "aws-ec2")
+                .configure(ACCESS_IDENTITY, "bogus")
+                .configure(ACCESS_CREDENTIAL, "bogus")
+//                .configure(ConfigKeys.newStringConfigKey("brooklyn.external.test"), )
+//                .configure(ConfigKeys.newStringConfigKey("brooklyn.external.test"), "org.apache.brooklyn.location.jclouds.JcloudsLocationTest.TestExternalConfigSupplier")
+//                .configure(ConfigKeys.newStringConfigKey("brooklyn.external.test.foo"), "somevalue")
+                .configure(USER_METADATA_STRING, "$brooklyn:external(\"test\", foo)");
+        FakeLocalhostWithParentJcloudsLocation ll = managementContext.getLocationManager().createLocation(LocationSpec.create(FakeLocalhostWithParentJcloudsLocation.class).configure(allConfig.getAllConfig()));
+        MachineLocation l = ll.obtain();
+        log.info("loc:" +l);
+        HostGeoInfo geo = HostGeoInfo.fromLocation(l);
+        log.info("geo: "+geo);
+        Assert.assertEquals(geo.latitude, 42d, 0.00001);
+        Assert.assertEquals(geo.longitude, -20d, 0.00001);
+    }
+
+    public class TestExternalConfigSupplier extends AbstractExternalConfigSupplier {
+        protected TestExternalConfigSupplier(ManagementContext managementContext, String name) {
+            super(managementContext, name);
+        }
+
+        @Override
+        public String get(String key) {
+            return null;
+        }
+    }
+    
 }
